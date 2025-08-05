@@ -63,13 +63,16 @@
 
 2. **项目获取**：将本项目克隆或下载到本地。
 
-3. **创建虚拟环境**：在项目目录下创建并激活conda虚拟环境（推荐）：
+3. **创建虚拟环境**：在项目目录下创建并激活虚拟环境（推荐）：
    ```bash
-   # 创建conda虚拟环境
-   conda create -n redbook-mcp python=3.8
+   # 创建虚拟环境
+   python -m venv venv
    
    # 激活虚拟环境
-   conda activate redbook-mcp
+   # Windows
+   venv\Scripts\activate
+   # macOS/Linux
+   source venv/bin/activate
    ```
 
 4. **安装依赖**：在激活的虚拟环境中安装所需依赖：
