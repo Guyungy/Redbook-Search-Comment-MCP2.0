@@ -70,9 +70,7 @@
    
    # 激活虚拟环境
    # Windows
-   venv\Scripts\activate
-   # macOS/Linux
-   source venv/bin/activate
+   .\venv\Scripts\activate
    ```
 
 4. **安装依赖**：在激活的虚拟环境中安装所需依赖：
