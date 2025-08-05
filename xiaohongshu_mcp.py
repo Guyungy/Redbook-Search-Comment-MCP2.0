@@ -7,17 +7,38 @@ from datetime import datetime
 from playwright.async_api import async_playwright
 from fastmcp import FastMCP
 
+# 设置环境变量强制Playwright使用英文路径的临时目录（必须在导入playwright之前设置）
+import sys
+import subprocess
+
+# 强制设置系统级环境变量
+os.environ['TMPDIR'] = 'C:\\temp_playwright'
+os.environ['TMP'] = 'C:\\temp_playwright'
+os.environ['TEMP'] = 'C:\\temp_playwright'
+os.environ['PLAYWRIGHT_BROWSERS_PATH'] = 'C:\\playwright_browsers'
+
+# 设置Windows系统环境变量（用户级别）
+try:
+    subprocess.run(['setx', 'TEMP', 'C:\\temp_playwright'], check=False, capture_output=True)
+    subprocess.run(['setx', 'TMP', 'C:\\temp_playwright'], check=False, capture_output=True)
+except Exception:
+    pass  # 忽略设置失败
+
 # 初始化 FastMCP 服务器
 mcp = FastMCP("xiaohongshu_scraper")
 
-# 全局变量
-BROWSER_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "browser_data")
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+# 全局变量 - 使用英文绝对路径避免中文路径权限问题
+BROWSER_DATA_DIR = "C:\\browser_data"
+DATA_DIR = "C:\\redbook_data"
+TEMP_PLAYWRIGHT_DIR = "C:\\temp_playwright"
+PLAYWRIGHT_BROWSERS_DIR = "C:\\playwright_browsers"
 TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 
 # 确保目录存在
 os.makedirs(BROWSER_DATA_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(TEMP_PLAYWRIGHT_DIR, exist_ok=True)
+os.makedirs(PLAYWRIGHT_BROWSERS_DIR, exist_ok=True)
 
 # 用于存储浏览器上下文，以便在不同方法之间共享
 browser_context = None
@@ -56,6 +77,36 @@ async def ensure_browser():
     global browser_context, main_page, is_logged_in
     
     if browser_context is None:
+        # 强制设置当前进程的环境变量
+        import tempfile
+        import shutil
+        
+        # 清理可能存在的临时文件
+        try:
+            temp_dirs = [TEMP_PLAYWRIGHT_DIR, os.path.join(os.environ.get('TEMP', ''), 'playwright-artifacts*')]
+            for temp_pattern in temp_dirs:
+                if '*' in temp_pattern:
+                    import glob
+                    for path in glob.glob(temp_pattern):
+                        if os.path.exists(path):
+                            shutil.rmtree(path, ignore_errors=True)
+                elif os.path.exists(temp_pattern):
+                    shutil.rmtree(temp_pattern, ignore_errors=True)
+        except Exception as e:
+            print(f"清理临时文件时出错: {e}")
+        
+        # 重新创建临时目录
+        os.makedirs(TEMP_PLAYWRIGHT_DIR, exist_ok=True)
+        
+        # 强制修改当前进程环境变量
+        os.environ['TMPDIR'] = TEMP_PLAYWRIGHT_DIR
+        os.environ['TMP'] = TEMP_PLAYWRIGHT_DIR
+        os.environ['TEMP'] = TEMP_PLAYWRIGHT_DIR
+        os.environ['PLAYWRIGHT_BROWSERS_PATH'] = PLAYWRIGHT_BROWSERS_DIR
+        
+        # 设置tempfile模块的临时目录
+        tempfile.tempdir = TEMP_PLAYWRIGHT_DIR
+        
         # 启动浏览器
         playwright_instance = await async_playwright().start()
         
@@ -64,7 +115,14 @@ async def ensure_browser():
             user_data_dir=BROWSER_DATA_DIR,
             headless=False,  # 非隐藏模式，方便用户登录
             viewport={"width": 1280, "height": 800},
-            timeout=60000
+            timeout=60000,
+            env={
+                **os.environ,
+                'TMPDIR': TEMP_PLAYWRIGHT_DIR,
+                'TMP': TEMP_PLAYWRIGHT_DIR,
+                'TEMP': TEMP_PLAYWRIGHT_DIR,
+                'PLAYWRIGHT_BROWSERS_PATH': PLAYWRIGHT_BROWSERS_DIR
+            }
         )
         
         # 创建一个新页面

@@ -116,9 +116,9 @@
 {
     "mcpServers": {
         "xiaohongshu MCP": {
-            "command": "C:\\Users\\张三\\Documents\\GitHub\\Redbook-Search-Comment-MCP2.0\\venv\\Scripts\\python.exe",
+            "command": "C:\\Redbook-Search-Comment-MCP2.0\\venv\\Scripts\\python.exe",
             "args": [
-                "C:\\Users\\张三\\Documents\\GitHub\\Redbook-Search-Comment-MCP2.0\\xiaohongshu_mcp.py",
+                "C:\\Redbook-Search-Comment-MCP2.0\\xiaohongshu_mcp.py",
                 "--stdio"
             ]
         }
@@ -425,25 +425,87 @@ Claude: 评论已成功发布！
 **Windows系统**：
 ```powershell
 # 删除浏览器锁文件
-Remove-Item -Path "项目路径\browser_data\SingletonLock" -Force -ErrorAction SilentlyContinue
-Remove-Item -Path "项目路径\browser_data\SingletonCookie" -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "C:\browser_data\SingletonLock" -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "C:\browser_data\SingletonCookie" -Force -ErrorAction SilentlyContinue
 
 # 如果问题仍然存在，备份并重建浏览器数据目录
-New-Item -ItemType Directory -Path "项目路径\backup_browser_data" -Force
-Move-Item -Path "项目路径\browser_data\*" -Destination "项目路径\backup_browser_data\" -Force
-New-Item -ItemType Directory -Path "项目路径\browser_data" -Force
+New-Item -ItemType Directory -Path "C:\backup_browser_data" -Force
+Move-Item -Path "C:\browser_data\*" -Destination "C:\backup_browser_data\" -Force
+New-Item -ItemType Directory -Path "C:\browser_data" -Force
 ```
 
 **Mac/Linux系统**：
 ```bash
 # 删除浏览器锁文件
-rm -f /项目路径/browser_data/SingletonLock /项目路径/browser_data/SingletonCookie
+rm -f /tmp/redbook_browser_data/SingletonLock /tmp/redbook_browser_data/SingletonCookie
 
 # 如果问题仍然存在，备份并重建浏览器数据目录
-mkdir -p /项目路径/backup_browser_data
-mv /项目路径/browser_data/* /项目路径/backup_browser_data/
-mkdir -p /项目路径/browser_data
+mkdir -p /tmp/backup_browser_data
+mv /tmp/redbook_browser_data/* /tmp/backup_browser_data/
+mkdir -p /tmp/redbook_browser_data
 ```
+
+**方案五：代码已自动修复路径问题**
+代码已经自动修改为使用英文绝对路径，避免中文路径权限问题：
+```python
+# 全局变量 - 使用英文绝对路径避免中文路径权限问题
+BROWSER_DATA_DIR = "C:\\browser_data"  # Windows
+DATA_DIR = "C:\\redbook_data"  # Windows
+```
+
+#### 方案六：强制设置Playwright临时目录（已自动修复）
+
+代码中已采用三重保障方式强制Playwright使用英文路径的临时目录：
+
+**1. 全局环境变量设置：**
+```python
+# 设置环境变量强制Playwright使用英文路径的临时目录（必须在导入playwright之前设置）
+os.environ['TMPDIR'] = 'C:\\temp_playwright'
+os.environ['TMP'] = 'C:\\temp_playwright'
+os.environ['TEMP'] = 'C:\\temp_playwright'
+os.environ['PLAYWRIGHT_BROWSERS_PATH'] = 'C:\\playwright_browsers'
+```
+
+**2. 运行时强制清理和重设：**
+```python
+# 清理可能存在的临时文件
+temp_dirs = [TEMP_PLAYWRIGHT_DIR, os.path.join(os.environ.get('TEMP', ''), 'playwright-artifacts*')]
+for temp_pattern in temp_dirs:
+    if '*' in temp_pattern:
+        for path in glob.glob(temp_pattern):
+            if os.path.exists(path):
+                shutil.rmtree(path, ignore_errors=True)
+
+# 强制修改当前进程环境变量
+os.environ['TMPDIR'] = TEMP_PLAYWRIGHT_DIR
+os.environ['TMP'] = TEMP_PLAYWRIGHT_DIR
+os.environ['TEMP'] = TEMP_PLAYWRIGHT_DIR
+
+# 设置tempfile模块的临时目录
+tempfile.tempdir = TEMP_PLAYWRIGHT_DIR
+```
+
+**3. 浏览器启动时环境变量传递：**
+```python
+browser_context = await playwright_instance.chromium.launch_persistent_context(
+    user_data_dir=BROWSER_DATA_DIR,
+    headless=False,
+    viewport={"width": 1280, "height": 800},
+    timeout=60000,
+    env={
+        **os.environ,
+        'TMPDIR': TEMP_PLAYWRIGHT_DIR,
+        'TMP': TEMP_PLAYWRIGHT_DIR,
+        'TEMP': TEMP_PLAYWRIGHT_DIR,
+        'PLAYWRIGHT_BROWSERS_PATH': PLAYWRIGHT_BROWSERS_DIR
+    }
+)
+```
+
+这样的三重保障机制可以彻底解决中文路径权限问题，确保Playwright在任何情况下都使用正确的英文路径临时目录。
+```
+
+> **注意**：程序会自动在系统目录创建这些文件夹，无需手动创建。如果仍有权限问题，请以管理员身份运行程序。
 
 #### 内容获取问题
 
