@@ -123,7 +123,7 @@
 > **重要提示**：
 > - 请使用虚拟环境中Python解释器的**完整绝对路径**
 > - Mac示例：`/Users/username/Desktop/RedBook-Search-Comment-MCP/venv/bin/python3`
-> - Windows示例：`C:\Users\username\Desktop\MCP\Redbook-Search-Comment-MCP2.0\venv\Scripts\python.exe`
+> - Windows示例：`C:\Users\4AM\Documents\GitHub\Redbook-Search-Comment-MCP2.0\venv\Scripts\python.exe`
 > - 同样，xiaohongshu_mcp.py也需要使用**完整绝对路径**
 > - Windows路径中的反斜杠在JSON中需要双重转义（使用 `\`）
 
