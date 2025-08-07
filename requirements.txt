@@ -1,3 +1,5 @@
+# 小红书搜索和评论 MCP 服务器依赖
+fastmcp>=0.1.0
 playwright>=1.40.0
 pytest-playwright>=0.4.0
 pandas>=2.1.1
@@ -10,3 +12,6 @@ schedule==1.2.0
 tqdm==4.66.1
 fastapi>=0.95.1
 uvicorn>=0.22.0
+
+# 可选依赖（用于更好的文本处理）
+jieba>=0.42.1
