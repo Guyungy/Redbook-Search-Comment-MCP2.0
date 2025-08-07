@@ -205,12 +205,39 @@ async def login() -> str:
 
 @mcp.tool()
 async def search_notes(keywords: str, limit: int = 5) -> str:
-    """根据关键词搜索笔记
+    """根据关键词搜索笔记（基础搜索）
     
     Args:
         keywords: 搜索关键词
         limit: 返回结果数量限制
     """
+    return await _basic_search(keywords, limit)
+
+@mcp.tool()
+async def smart_search_notes(task_description: str, limit: int = 10) -> str:
+    """智能搜索笔记 - AI Agent式深度搜索
+    
+    这是一个智能搜索系统，能够：
+    1. 分析用户任务意图
+    2. 自动生成多个搜索策略
+    3. 执行多轮搜索并优化关键词
+    4. 智能筛选和排序结果
+    5. 提供搜索分析报告
+    
+    Args:
+        task_description: 任务描述，例如：
+                         "我想找一些关于护肤的笔记，特别是敏感肌护理方面的"
+                         "帮我搜索最近流行的穿搭趋势，偏向日系风格"
+                         "找一些关于AI工具使用的教程和经验分享"
+        limit: 返回结果数量限制
+    
+    Returns:
+        str: 包含搜索结果和分析报告的详细信息
+    """
+    return await _intelligent_search_agent(task_description, limit)
+
+async def _basic_search(keywords: str, limit: int = 5) -> str:
+    """基础搜索功能（原search_notes逻辑）"""
     login_status = await ensure_browser()
     if not login_status:
         return "请先登录小红书账号"
@@ -347,6 +374,431 @@ async def search_notes(keywords: str, limit: int = 5) -> str:
     
     except Exception as e:
         return f"搜索笔记时出错: {str(e)}"
+
+async def _intelligent_search_agent(task_description: str, limit: int = 10) -> str:
+    """智能搜索代理 - 实现AI Agent式的深度搜索"""
+    try:
+        print(f"\n=== 智能搜索代理启动 ===")
+        print(f"任务描述: {task_description}")
+        print(f"目标结果数量: {limit}")
+        
+        # 第一步：任务意图分析
+        search_strategy = await _analyze_search_intent(task_description)
+        print(f"\n搜索策略分析完成:")
+        print(f"- 主要领域: {search_strategy['domain']}")
+        print(f"- 核心关键词: {search_strategy['core_keywords']}")
+        print(f"- 扩展关键词: {search_strategy['extended_keywords']}")
+        print(f"- 搜索优先级: {search_strategy['priority']}")
+        
+        # 第二步：多轮搜索执行
+        all_results = []
+        search_rounds = []
+        
+        # 执行核心关键词搜索
+        for i, keyword_group in enumerate(search_strategy['search_queries'][:3]):
+            print(f"\n--- 第{i+1}轮搜索 ---")
+            print(f"搜索关键词: {keyword_group}")
+            
+            round_results = await _execute_search_round(keyword_group, min(limit, 8))
+            search_rounds.append({
+                'round': i+1,
+                'keywords': keyword_group,
+                'results_count': len(round_results),
+                'results': round_results
+            })
+            all_results.extend(round_results)
+            
+            # 避免过于频繁的请求
+            await asyncio.sleep(2)
+        
+        # 第三步：结果去重和智能筛选
+        print(f"\n--- 结果处理阶段 ---")
+        print(f"原始结果数量: {len(all_results)}")
+        
+        unique_results = await _deduplicate_results(all_results)
+        print(f"去重后结果数量: {len(unique_results)}")
+        
+        # 第四步：智能排序和筛选
+        scored_results = await _score_and_rank_results(unique_results, search_strategy, task_description)
+        final_results = scored_results[:limit]
+        print(f"最终筛选结果数量: {len(final_results)}")
+        
+        # 第五步：生成搜索报告
+        report = await _generate_search_report(task_description, search_strategy, search_rounds, final_results)
+        
+        return report
+        
+    except Exception as e:
+        return f"智能搜索时出错: {str(e)}"
+
+async def _analyze_search_intent(task_description: str) -> dict:
+    """分析搜索意图并生成搜索策略"""
+    # 领域关键词映射
+    domain_mapping = {
+        "美妆": ["护肤", "化妆", "彩妆", "美容", "面膜", "精华", "粉底", "口红", "眼影", "敏感肌", "痘痘", "美白", "抗老"],
+        "穿搭": ["穿搭", "搭配", "服装", "时尚", "风格", "日系", "韩系", "欧美", "复古", "简约", "甜美", "酷帅", "职场"],
+        "美食": ["美食", "料理", "烹饪", "食谱", "甜品", "烘焙", "家常菜", "减脂餐", "健康饮食", "网红店"],
+        "旅行": ["旅行", "旅游", "攻略", "景点", "民宿", "酒店", "机票", "签证", "自由行", "跟团"],
+        "健身": ["健身", "运动", "瘦身", "减肥", "瑜伽", "跑步", "力量训练", "有氧", "塑形", "马甲线"],
+        "数码": ["数码", "手机", "电脑", "相机", "耳机", "智能", "科技", "评测", "开箱"],
+        "家居": ["家居", "装修", "家具", "设计", "收纳", "布置", "软装", "北欧", "简约", "温馨"],
+        "AI": ["AI", "人工智能", "ChatGPT", "Claude", "大模型", "编程", "工具", "效率", "自动化"]
+    }
+    
+    # 分析任务描述，识别领域和关键词
+    detected_domain = "生活"
+    core_keywords = []
+    extended_keywords = []
+    
+    task_lower = task_description.lower()
+    
+    # 识别主要领域
+    for domain, keywords in domain_mapping.items():
+        for keyword in keywords:
+            if keyword.lower() in task_lower:
+                detected_domain = domain
+                core_keywords.append(keyword)
+                break
+        if detected_domain != "生活":
+            break
+    
+    # 如果识别到领域，添加相关扩展关键词
+    if detected_domain in domain_mapping:
+        extended_keywords = domain_mapping[detected_domain][:8]
+    
+    # 从任务描述中提取其他关键词
+    import re
+    # 提取中文词汇
+    chinese_words = re.findall(r'[\u4e00-\u9fff]+', task_description)
+    for word in chinese_words:
+        if len(word) >= 2 and word not in core_keywords:
+            core_keywords.append(word)
+    
+    # 生成搜索查询组合
+    search_queries = []
+    
+    # 核心关键词组合
+    if core_keywords:
+        search_queries.append(" ".join(core_keywords[:3]))
+    
+    # 领域+核心词组合
+    if detected_domain != "生活" and core_keywords:
+        search_queries.append(f"{detected_domain} {core_keywords[0]}")
+    
+    # 扩展关键词组合
+    for ext_keyword in extended_keywords[:3]:
+        if core_keywords:
+            search_queries.append(f"{ext_keyword} {core_keywords[0]}")
+        else:
+            search_queries.append(ext_keyword)
+    
+    return {
+        'domain': detected_domain,
+        'core_keywords': core_keywords[:5],
+        'extended_keywords': extended_keywords,
+        'search_queries': search_queries[:5],
+        'priority': 'high' if len(core_keywords) > 2 else 'medium'
+    }
+
+async def _execute_search_round(keywords: str, limit: int) -> list:
+    """执行单轮搜索"""
+    try:
+        result_str = await _basic_search(keywords, limit)
+        
+        # 解析搜索结果
+        results = []
+        if "搜索结果：" in result_str:
+            lines = result_str.split('\n')
+            current_item = {}
+            
+            for line in lines:
+                line = line.strip()
+                if line and line[0].isdigit() and '. ' in line:
+                    # 保存上一个项目
+                    if current_item:
+                        results.append(current_item)
+                    # 开始新项目
+                    title = line.split('. ', 1)[1] if '. ' in line else line
+                    current_item = {'title': title, 'url': '', 'keywords': keywords}
+                elif line.startswith('链接: '):
+                    if current_item:
+                        current_item['url'] = line.replace('链接: ', '')
+            
+            # 添加最后一个项目
+            if current_item:
+                results.append(current_item)
+        
+        return results
+        
+    except Exception as e:
+        print(f"搜索轮次执行出错: {str(e)}")
+        return []
+
+async def _deduplicate_results(results: list) -> list:
+    """去重搜索结果"""
+    seen_urls = set()
+    unique_results = []
+    
+    for result in results:
+        url = result.get('url', '')
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            unique_results.append(result)
+    
+    return unique_results
+
+async def _score_and_rank_results(results: list, strategy: dict, task_description: str) -> list:
+    """对搜索结果进行评分和排序"""
+    scored_results = []
+    
+    for result in results:
+        score = 0
+        title = result.get('title', '').lower()
+        
+        # 核心关键词匹配得分
+        for keyword in strategy['core_keywords']:
+            if keyword.lower() in title:
+                score += 10
+        
+        # 领域关键词匹配得分
+        domain_keywords = {
+            "美妆": ["护肤", "化妆", "美容"],
+            "穿搭": ["穿搭", "搭配", "时尚"],
+            "美食": ["美食", "料理", "食谱"],
+            "旅行": ["旅行", "攻略", "景点"],
+            "健身": ["健身", "运动", "减肥"],
+            "数码": ["数码", "科技", "评测"],
+            "家居": ["家居", "装修", "设计"],
+            "AI": ["AI", "工具", "效率"]
+        }
+        
+        if strategy['domain'] in domain_keywords:
+            for keyword in domain_keywords[strategy['domain']]:
+                if keyword in title:
+                    score += 5
+        
+        # 标题长度合理性得分
+        title_len = len(result.get('title', ''))
+        if 10 <= title_len <= 50:
+            score += 3
+        elif title_len > 50:
+            score += 1
+        
+        # 添加随机因子避免结果过于固化
+        import random
+        score += random.uniform(0, 2)
+        
+        result['score'] = score
+        scored_results.append(result)
+    
+    # 按得分排序
+    return sorted(scored_results, key=lambda x: x['score'], reverse=True)
+
+async def _generate_search_report(task_description: str, strategy: dict, search_rounds: list, final_results: list) -> str:
+    """生成搜索分析报告"""
+    report = f"""🤖 智能搜索分析报告
+
+📋 任务描述: {task_description}
+
+🎯 搜索策略分析:
+• 识别领域: {strategy['domain']}
+• 核心关键词: {', '.join(strategy['core_keywords'])}
+• 搜索优先级: {strategy['priority']}
+
+🔍 搜索执行过程:"""
+    
+    total_searched = 0
+    for round_info in search_rounds:
+        report += f"\n• 第{round_info['round']}轮: \"{round_info['keywords']}\" → {round_info['results_count']}个结果"
+        total_searched += round_info['results_count']
+    
+    report += f"\n\n📊 搜索统计:\n• 总搜索结果: {total_searched}个\n• 去重后结果: {len(final_results)}个\n• 最终推荐: {len(final_results)}个\n\n🏆 推荐结果:\n\n"
+    
+    for i, result in enumerate(final_results, 1):
+        score_stars = "⭐" * min(5, int(result.get('score', 0) // 3))
+        report += f"{i}. {result['title']} {score_stars}\n   🔗 {result['url']}\n   📊 匹配度: {result.get('score', 0):.1f}分\n\n"
+    
+    if not final_results:
+        report += "❌ 未找到符合条件的笔记，建议：\n• 尝试更通用的关键词\n• 检查关键词拼写\n• 扩大搜索范围\n"
+    
+    return report
+
+@mcp.tool()
+async def deep_search_and_analyze(task_description: str, analyze_content: bool = True, limit: int = 5) -> str:
+    """深度搜索并分析 - 最高级的AI Agent搜索模式
+    
+    这是最智能的搜索模式，能够：
+    1. 执行智能搜索获取相关笔记
+    2. 自动分析每个笔记的详细内容
+    3. 提取关键信息和趋势
+    4. 生成深度分析报告
+    5. 提供行动建议
+    
+    Args:
+        task_description: 任务描述
+        analyze_content: 是否分析笔记内容（耗时较长但信息更全面）
+        limit: 分析的笔记数量限制
+    
+    Returns:
+        str: 包含搜索结果、内容分析和趋势报告的综合信息
+    """
+    try:
+        print(f"\n=== 深度搜索分析代理启动 ===")
+        print(f"任务: {task_description}")
+        print(f"内容分析: {'开启' if analyze_content else '关闭'}")
+        print(f"分析数量: {limit}")
+        
+        # 第一步：执行智能搜索
+        search_results = await _intelligent_search_agent(task_description, limit * 2)
+        
+        if "❌ 未找到符合条件的笔记" in search_results:
+            return search_results
+        
+        # 从搜索结果中提取URL
+        urls = await _extract_urls_from_search_results(search_results)
+        selected_urls = urls[:limit]
+        
+        print(f"\n=== 开始深度内容分析 ===")
+        print(f"将分析 {len(selected_urls)} 个笔记")
+        
+        # 第二步：内容分析（如果启用）
+        analyzed_notes = []
+        if analyze_content and selected_urls:
+            for i, url in enumerate(selected_urls, 1):
+                print(f"\n--- 分析第{i}个笔记 ---")
+                print(f"URL: {url}")
+                
+                try:
+                    note_analysis = await analyze_note(url)
+                    if "error" not in note_analysis:
+                        analyzed_notes.append(note_analysis)
+                        print(f"✅ 分析完成: {note_analysis.get('标题', '未知标题')}")
+                    else:
+                        print(f"❌ 分析失败: {note_analysis.get('error', '未知错误')}")
+                    
+                    # 避免请求过于频繁
+                    await asyncio.sleep(3)
+                    
+                except Exception as e:
+                    print(f"❌ 分析笔记时出错: {str(e)}")
+                    continue
+        
+        # 第三步：生成深度分析报告
+        deep_report = await _generate_deep_analysis_report(
+            task_description, search_results, analyzed_notes
+        )
+        
+        return deep_report
+        
+    except Exception as e:
+        return f"深度搜索分析时出错: {str(e)}"
+
+async def _extract_urls_from_search_results(search_results: str) -> list:
+    """从搜索结果中提取URL"""
+    urls = []
+    lines = search_results.split('\n')
+    
+    for line in lines:
+        if '🔗 ' in line:
+            url = line.split('🔗 ', 1)[1].strip()
+            if url.startswith('http'):
+                urls.append(url)
+    
+    return urls
+
+async def _generate_deep_analysis_report(task_description: str, search_results: str, analyzed_notes: list) -> str:
+    """生成深度分析报告"""
+    report = f"""🧠 深度搜索分析报告
+
+📋 分析任务: {task_description}
+
+{search_results}
+
+═══════════════════════════════════════
+
+📊 内容深度分析:"""
+    
+    if not analyzed_notes:
+        report += "\n\n⚠️ 未能获取到笔记内容进行深度分析"
+        return report
+    
+    # 统计分析
+    total_notes = len(analyzed_notes)
+    domains = []
+    all_keywords = []
+    authors = []
+    
+    for note in analyzed_notes:
+        if note.get('领域'):
+            domains.extend(note['领域'])
+        if note.get('关键词'):
+            all_keywords.extend(note['关键词'])
+        if note.get('作者'):
+            authors.append(note['作者'])
+    
+    # 领域分布统计
+    from collections import Counter
+    domain_count = Counter(domains)
+    keyword_count = Counter(all_keywords)
+    
+    report += f"\n\n📈 统计概览:\n• 分析笔记数量: {total_notes}个\n• 涉及领域: {len(domain_count)}个\n• 提取关键词: {len(keyword_count)}个\n• 涉及作者: {len(set(authors))}位"
+    
+    # 热门领域
+    if domain_count:
+        report += "\n\n🏷️ 热门领域分布:"
+        for domain, count in domain_count.most_common(5):
+            percentage = (count / len(domains)) * 100
+            report += f"\n• {domain}: {count}次 ({percentage:.1f}%)"
+    
+    # 热门关键词
+    if keyword_count:
+        report += "\n\n🔥 热门关键词:"
+        for keyword, count in keyword_count.most_common(10):
+            report += f"\n• {keyword} ({count}次)"
+    
+    # 详细笔记分析
+    report += "\n\n📝 详细笔记分析:\n"
+    
+    for i, note in enumerate(analyzed_notes, 1):
+        report += f"\n{i}. 📄 {note.get('标题', '未知标题')}\n"
+        report += f"   👤 作者: {note.get('作者', '未知')}\n"
+        report += f"   🏷️ 领域: {', '.join(note.get('领域', []))}\n"
+        
+        content = note.get('内容', '')
+        if content and content != '未能获取内容':
+            # 显示内容摘要
+            content_preview = content[:100] + '...' if len(content) > 100 else content
+            report += f"   📖 内容摘要: {content_preview}\n"
+        
+        report += f"   🔗 链接: {note.get('url', '')}\n"
+    
+    # 趋势分析和建议
+    report += "\n\n🎯 趋势分析与建议:\n"
+    
+    if domain_count:
+        top_domain = domain_count.most_common(1)[0][0]
+        report += f"• 主要关注领域是 '{top_domain}'，建议深入研究该领域的最新趋势\n"
+    
+    if keyword_count:
+        top_keywords = [kw for kw, _ in keyword_count.most_common(3)]
+        report += f"• 核心关键词包括: {', '.join(top_keywords)}，可作为内容创作的重点方向\n"
+    
+    if len(set(authors)) > 1:
+        report += f"• 发现 {len(set(authors))} 位不同作者，建议关注他们的其他作品\n"
+    
+    # 内容质量评估
+    quality_notes = [note for note in analyzed_notes if note.get('内容') and len(note.get('内容', '')) > 50]
+    if quality_notes:
+        quality_ratio = len(quality_notes) / total_notes * 100
+        report += f"• 内容质量评估: {len(quality_notes)}/{total_notes} 个笔记有详细内容 ({quality_ratio:.1f}%)\n"
+    
+    report += "\n💡 行动建议:\n"
+    report += "• 可以基于热门关键词创作相关内容\n"
+    report += "• 关注高质量作者的更新动态\n"
+    report += "• 结合趋势分析制定内容策略\n"
+    report += "• 考虑在热门领域进行深度布局\n"
+    
+    return report
 
 @mcp.tool()
 async def get_note_content(url: str) -> str:
