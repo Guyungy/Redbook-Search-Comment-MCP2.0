@@ -110,9 +110,9 @@
 {
     "mcpServers": {
         "xiaohongshu MCP": {
-            "command": "C:\\Redbook-Search-Comment-MCP2.0\\venv\\Scripts\\python.exe",
+            "command": "C:\\Users\\4AM\\Documents\\GitHub\\Redbook-Search-Comment-MCP2.0\\venv\\Scripts\\python.exe",
             "args": [
-                "C:\\Redbook-Search-Comment-MCP2.0\\xiaohongshu_mcp.py",
+                "C:\\Users\\4AM\\Documents\\GitHub\\Redbook-Search-Comment-MCP2.0\\xiaohongshu_mcp.py",
                 "--stdio"
             ]
         }
